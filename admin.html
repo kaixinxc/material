@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>管理员后台 - 素材管理</title>
+    <title>管理员后台 - 大文件上传</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- 引入七牛云JS SDK（分片上传核心） -->
+    <script src="https://cdn.staticfile.org/plupload/3.1.6/plupload.full.min.js"></script>
+    <script src="https://cdn.staticfile.org/qiniu-js/3.4.9/qiniu.min.js"></script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{background:#f8f9fa}
@@ -12,22 +15,18 @@
         .navbar-brand{color:#fff;font-weight:bold}
         .upload-box{border:2px dashed #165DFF;padding:40px 20px;text-align:center;border-radius:8px;background:#fff;margin-bottom:30px}
         .card{border-radius:8px;overflow:hidden;position:relative}
-        .preview-modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;display:none;align-items:center;justify-content:center}
-        .preview-modal.active{display:flex}
-        .close{position:absolute;top:20px;right:30px;color:#fff;font-size:40px;cursor:pointer}
+        .batch-operations{margin-bottom:15px;display:flex;align-items:center;gap:10px}
+        .checkbox-item{position:absolute;top:5px;left:5px;width:20px;height:20px;z-index:10;background:#fff;border-radius:3px}
+        .card-body{padding-top:25px !important}
         
-        /* 上传进度样式 */
-        .progress-container{
+        /* 大文件上传进度样式 */
+        .upload-progress{
             width: 80%;
             margin: 20px auto;
-            display: none;
-        }
-        .upload-progress{
-            height: 8px;
-            border-radius: 4px;
+            height: 10px;
+            border-radius: 5px;
             background: #eee;
             overflow: hidden;
-            margin-bottom: 8px;
         }
         .progress-bar{
             height: 100%;
@@ -35,39 +34,17 @@
             width: 0%;
             transition: width 0.2s ease;
         }
-        .progress-text{
+        .progress-info{
+            width: 80%;
+            margin: 10px auto;
             font-size: 14px;
             color: #666;
+            text-align: left;
         }
-        .upload-status{
-            margin-top: 10px;
-            font-size: 14px;
-            color: #28a745;
-            display: none;
-        }
-        .upload-error{
-            color: #dc3545;
-        }
-
-        /* 批量删除样式 */
-        .batch-operations{
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .checkbox-item{
-            position: absolute;
-            top: 5px;
-            left: 5px;
-            width: 20px;
-            height: 20px;
-            z-index: 10;
-            background: #fff;
-            border-radius: 3px;
-        }
-        .card-body{
-            padding-top: 25px !important;
+        .file-item{
+            padding: 8px 0;
+            border-bottom: 1px dashed #eee;
+            margin: 5px 0;
         }
     </style>
 </head>
@@ -75,7 +52,7 @@
 
 <nav class="navbar navbar-expand-lg">
     <div class="container">
-        <a class="navbar-brand" href="admin.html">🔐 管理员后台</a>
+        <a class="navbar-brand" href="admin.html">🔐 管理员后台（大文件上传）</a>
         <button class="btn btn-light btn-sm" onclick="logout()">退出登录</button>
     </div>
 </nav>
@@ -87,32 +64,38 @@
         <button class="btn btn-danger" onclick="login()">登录后台</button>
     </div>
 
-    <!-- 管理功能（登录后显示） -->
+    <!-- 管理功能 -->
     <div id="adminMain" class="d-none">
-        <!-- 上传区域 -->
+        <!-- 七牛云配置（替换成你的！） -->
         <div class="upload-box">
-            <h5>📤 批量上传素材（图片/视频）</h5>
-            <p class="text-muted">支持JPG/PNG/MP4，可多选文件</p>
-            <select id="cate" class="form-select w-50 mx-auto my-3">
-                <option value="短视频素材">短视频素材</option>
-                <option value="风景实拍">风景实拍</option>
-                <option value="人物素材">人物素材</option>
-                <option value="剪辑背景">剪辑背景</option>
-            </select>
-            <input type="file" id="file" multiple accept="image/*,video/*" class="d-none">
-            <button class="btn btn-primary" onclick="document.getElementById('file').click()">选择多个文件上传</button>
-            
-            <!-- 上传进度区域 -->
-            <div class="progress-container" id="progressContainer">
-                <div class="upload-progress">
-                    <div class="progress-bar" id="progressBar"></div>
-                </div>
-                <div class="progress-text" id="progressText">上传进度：0%</div>
+            <h5>📤 大文件分片上传（支持800MB+）</h5>
+            <div class="mb-3">
+                <label class="form-label">素材分类</label>
+                <select id="cate" class="form-select w-50 mx-auto">
+                    <option value="短视频素材">短视频素材</option>
+                    <option value="风景实拍">风景实拍</option>
+                    <option value="人物素材">人物素材</option>
+                    <option value="剪辑背景">剪辑背景</option>
+                </select>
             </div>
-            <div class="upload-status" id="uploadStatus"></div>
+            
+            <!-- 上传按钮 -->
+            <button class="btn btn-primary" id="selectFileBtn">选择大文件（800MB+）</button>
+            
+            <!-- 上传进度 -->
+            <div class="upload-progress mt-4" id="totalProgress">
+                <div class="progress-bar" id="totalProgressBar"></div>
+            </div>
+            <div class="progress-info" id="progressText">请选择文件开始上传</div>
+            
+            <!-- 已上传文件列表 -->
+            <div class="mt-4 w-80 mx-auto text-left" id="fileList">
+                <h6>已上传素材：</h6>
+                <div id="uploadedFiles"></div>
+            </div>
         </div>
 
-        <!-- 批量操作区域 -->
+        <!-- 批量删除区域 -->
         <div class="batch-operations">
             <input type="checkbox" id="selectAll" onclick="toggleSelectAll()">
             <label for="selectAll">全选</label>
@@ -120,168 +103,135 @@
             <span id="selectedCount" style="color:#666;">已选：0个</span>
         </div>
 
-        <!-- 素材管理列表 -->
+        <!-- 素材预览列表 -->
         <h5 class="mb-3">🗂️ 素材管理</h5>
-        <div class="row g-3" id="list"></div>
+        <div class="row g-3" id="materialList"></div>
     </div>
 </div>
 
-<!-- 预览弹窗 -->
-<div class="preview-modal" id="modal">
-    <span class="close" onclick="closeModal()">&times;</span>
-    <img class="preview-media" id="preImg">
-    <video class="preview-media" id="preVideo" controls></video>
-</div>
-
 <script>
+// ===================== 替换成你的七牛云信息！=====================
+const ACCESS_KEY = 4mVCrBCgrPfvehJeKeSaDIGwbnUaG8ke4ONPbUHq
+const SECRET_KEY = rOaWd_g7NlLSqfnSnl8sL-tTa1Xq9M_stiwzvba8
+const BUCKET_DOMAIN = tdsgn3px0.hd-bkt.clouddn.com
+const BUCKET_NAME = kaixinxiaochen
+// ================================================================
+
 const PASSWORD = "goodluck";
-let data = JSON.parse(localStorage.getItem("materialData")) || [];
 let loginStatus = localStorage.getItem("adminLogin") === "true";
+// 存储素材信息（仅存链接，不存文件本身）
+let materialData = JSON.parse(localStorage.getItem("qiniuMaterialData")) || [];
 
-// 进度条相关元素
-const progressContainer = document.getElementById('progressContainer');
-const progressBar = document.getElementById('progressBar');
-const progressText = document.getElementById('progressText');
-const uploadStatus = document.getElementById('uploadStatus');
-
-window.onload = function(){
-    if(loginStatus){showAdmin()}
-    renderList();
-}
-
-// 登录
-function login(){
+// 登录逻辑
+function login() {
     let p = document.getElementById("pwd").value;
-    if(p === PASSWORD){
+    if (p === PASSWORD) {
         loginStatus = true;
-        localStorage.setItem("adminLogin","true");
-        showAdmin();
-    }else{alert("密码错误！")}
+        localStorage.setItem("adminLogin", "true");
+        document.getElementById("loginBox").classList.add("d-none");
+        document.getElementById("adminMain").classList.remove("d-none");
+        renderMaterialList();
+    } else {
+        alert("密码错误！");
+    }
 }
 
-// 退出
-function logout(){
+function logout() {
     loginStatus = false;
-    localStorage.setItem("adminLogin","false");
+    localStorage.setItem("adminLogin", "false");
     location.reload();
 }
 
-// 显示后台
-function showAdmin(){
-    document.getElementById("loginBox").classList.add("d-none");
-    document.getElementById("adminMain").classList.remove("d-none");
+// 获取七牛云上传凭证（前端临时生成，生产环境建议后端生成）
+function getUploadToken() {
+    const putPolicy = {
+        scope: BUCKET_NAME,
+        deadline: Math.floor(Date.now() / 1000) + 3600, // 凭证有效期1小时
+    };
+    const encodedPolicy = btoa(JSON.stringify(putPolicy)).replace(/\//g, '_').replace(/\+/g, '-');
+    const sign = CryptoJS.HmacSHA1(encodedPolicy, SECRET_KEY).toString(CryptoJS.enc.Base64).replace(/\//g, '_').replace(/\+/g, '-');
+    return ACCESS_KEY + ':' + sign + ':' + encodedPolicy;
 }
 
-// 批量上传（支持多文件）
-document.getElementById("file").addEventListener("change",async e=>{
-    let files = e.target.files;
-    if(files.length === 0) return;
-    
-    let cate = document.getElementById("cate").value;
-    let totalFiles = files.length;
-    let completedFiles = 0;
-
-    // 显示进度条
-    progressContainer.style.display = 'block';
-    uploadStatus.style.display = 'none';
-    uploadStatus.className = 'upload-status';
-
-    // 逐个上传文件
-    for(let f of files){
-        try {
-            // 更新当前上传文件信息
-            progressText.textContent = `正在上传：${f.name} (${completedFiles+1}/${totalFiles}) - 0%`;
-            progressBar.style.width = '0%';
-
-            // 带进度的Base64转换
-            let src = await toBase64WithProgress(f, (progress) => {
-                let percent = Math.round(progress * 100);
-                progressBar.style.width = `${percent}%`;
-                progressText.textContent = `正在上传：${f.name} (${completedFiles+1}/${totalFiles}) - ${percent}%`;
-            });
-
-            // 保存到本地存储
-            data.push({
-                name:f.name,
-                type:f.type.startsWith("image")?"img":"video",
-                cate:cate,
-                src:src
-            });
-
-            completedFiles++;
-            // 更新进度为100%
-            progressBar.style.width = '100%';
-            progressText.textContent = `上传完成：${f.name} (${completedFiles}/${totalFiles}) - 100%`;
-            
-        } catch (error) {
-            // 上传失败提示
-            uploadStatus.style.display = 'block';
-            uploadStatus.className = 'upload-status upload-error';
-            uploadStatus.textContent = `文件 ${f.name} 上传失败：${error.message}`;
-            console.error("上传失败", error);
-        }
+// 初始化大文件上传
+document.getElementById("selectFileBtn").addEventListener("click", function() {
+    // 生成上传凭证
+    const token = getUploadToken();
+    if (!token) {
+        alert("请先正确配置七牛云AccessKey/SecretKey！");
+        return;
     }
 
-    // 全部上传完成
-    localStorage.setItem("materialData",JSON.stringify(data));
-    renderList();
-    
-    // 显示最终状态
-    uploadStatus.style.display = 'block';
-    uploadStatus.textContent = `✅ 批量上传完成！共${completedFiles}/${totalFiles}个文件，前台已同步`;
-    
-    // 3秒后隐藏进度条
-    setTimeout(() => {
-        progressContainer.style.display = 'none';
-    }, 3000);
-
-    // 清空文件选择框
-    document.getElementById("file").value = "";
+    // 初始化七牛云分片上传
+    const uploader = qiniu.uploader({
+        runtimes: 'html5,flash,html4', // 优先用H5分片
+        browse_button: 'selectFileBtn', // 上传按钮ID
+        uptoken: token, // 上传凭证
+        domain: BUCKET_DOMAIN, // 空间域名
+        chunk_size: '4mb', // 分片大小（4MB/片，800MB会分成200片）
+        auto_start: true, // 选择文件后自动上传
+        unique_names: true, // 自动生成唯一文件名（避免重复）
+        
+        // 上传中回调（实时更新进度）
+        uploadProgress: function(up, file) {
+            const percent = file.percent;
+            document.getElementById("totalProgressBar").style.width = percent + '%';
+            document.getElementById("progressText").innerHTML = 
+                `正在上传：${file.name} <br>
+                总进度：${percent.toFixed(2)}% | 已传：${(file.loaded/1024/1024).toFixed(2)}MB/${(file.size/1024/1024).toFixed(2)}MB <br>
+                分片：${file.chunk_idx + 1}/${file.chunks}`;
+        },
+        
+        // 单个文件上传完成
+        fileUploaded: function(up, file, info) {
+            const res = JSON.parse(info);
+            // 文件访问链接
+            const fileUrl = `https://${BUCKET_DOMAIN}/${res.key}`;
+            const cate = document.getElementById("cate").value;
+            
+            // 保存素材信息（仅存链接，不存文件）
+            materialData.push({
+                name: file.name,
+                type: file.type.startsWith("image") ? "img" : "video",
+                cate: cate,
+                url: fileUrl,
+                key: res.key // 七牛云文件唯一标识（用于删除）
+            });
+            localStorage.setItem("qiniuMaterialData", JSON.stringify(materialData));
+            
+            // 更新进度和列表
+            document.getElementById("totalProgressBar").style.width = '100%';
+            document.getElementById("progressText").textContent = `✅ ${file.name} 上传完成！链接：${fileUrl}`;
+            renderMaterialList();
+        },
+        
+        // 上传错误
+        error: function(up, err, errTip) {
+            alert(`上传失败：${errTip}`);
+            document.getElementById("progressText").textContent = `❌ 上传失败：${errTip}`;
+        }
+    });
 });
 
-// 带进度的Base64转换函数
-function toBase64WithProgress(file, onProgress) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        
-        // 进度回调
-        reader.onprogress = function(e) {
-            if (e.lengthComputable) {
-                const progress = e.loaded / e.total;
-                onProgress(progress);
-            }
-        };
-        
-        // 完成回调
-        reader.onload = function() {
-            resolve(reader.result);
-        };
-        
-        // 错误回调
-        reader.onerror = function(error) {
-            reject(error);
-        };
-        
-        // 开始读取
-        reader.readAsDataURL(file);
-    });
-}
-
-// 渲染素材列表（新增复选框）
-function renderList(){
-    let list = document.getElementById("list");
-    let html = "";
+// 渲染素材列表
+function renderMaterialList() {
+    const list = document.getElementById("materialList");
+    const fileList = document.getElementById("uploadedFiles");
     
-    if(data.length === 0){
+    if (materialData.length === 0) {
         list.innerHTML = '<div class="col-12 text-center text-muted">暂无素材</div>';
+        fileList.innerHTML = '<div class="text-muted">暂无上传的素材</div>';
         updateSelectedCount();
         return;
     }
 
-    data.forEach((item,i)=>{
-        let media = item.type==="img"
-            ?`<img src="${item.src}" width="100%" height="120" style="object-fit:cover">`
-            :`<video src="${item.src}" width="100%" height="120" style="object-fit:cover"></video>`;
+    // 渲染素材卡片
+    let html = "";
+    let fileHtml = "";
+    materialData.forEach((item, i) => {
+        let media = item.type === "img" 
+            ? `<img src="${item.url}" width="100%" height="120" style="object-fit:cover" onclick="preview('${item.type}', '${item.url}')">`
+            : `<video src="${item.url}" width="100%" height="120" style="object-fit:cover" controls onclick="preview('${item.type}', '${item.url}')">`;
         
         html += `
         <div class="col-lg-2 col-md-3 col-sm-4 col-6">
@@ -290,87 +240,94 @@ function renderList(){
                 ${media}
                 <div class="card-body p-2">
                     <p class="small text-truncate">${item.name}</p>
-                    <button class="btn btn-sm btn-danger w-100" onclick="del(${i})">删除</button>
+                    <button class="btn btn-sm btn-danger w-100" onclick="deleteMaterial(${i})">删除</button>
                 </div>
             </div>
         </div>`;
+
+        fileHtml += `<div class="file-item">✅ ${item.name} - <a href="${item.url}" target="_blank">查看</a></div>`;
     });
+
     list.innerHTML = html;
+    fileList.innerHTML = fileHtml;
     updateSelectedCount();
 }
 
-// 单个删除
-function del(i){
-    if(confirm("确定删除该素材吗？")){
-        data.splice(i,1);
-        localStorage.setItem("materialData",JSON.stringify(data));
-        renderList();
-    }
+// 预览素材
+function preview(type, url) {
+    window.open(url, "_blank");
+}
+
+// 单个删除（删除七牛云文件+本地记录）
+function deleteMaterial(index) {
+    const item = materialData[index];
+    if (!confirm(`确定删除 ${item.name} 吗？`)) return;
+
+    // 1. 删除七牛云文件（需要删除凭证，简化版先删本地记录）
+    // 生产环境建议后端调用七牛云API删除，前端删除仅演示
+    // 2. 删除本地记录
+    materialData.splice(index, 1);
+    localStorage.setItem("qiniuMaterialData", JSON.stringify(materialData));
+    renderMaterialList();
+    alert("素材已删除！");
 }
 
 // 全选/取消全选
-function toggleSelectAll(){
+function toggleSelectAll() {
     const selectAll = document.getElementById('selectAll');
     const checkboxes = document.querySelectorAll('.checkbox-item');
-    
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = selectAll.checked;
-    });
+    checkboxes.forEach(checkbox => checkbox.checked = selectAll.checked);
     updateSelectedCount();
 }
 
 // 更新选中数量
-function updateSelectedCount(){
-    const checkboxes = document.querySelectorAll('.checkbox-item:checked');
-    const count = checkboxes.length;
+function updateSelectedCount() {
+    const count = document.querySelectorAll('.checkbox-item:checked').length;
     document.getElementById('selectedCount').textContent = `已选：${count}个`;
 }
 
 // 批量删除
-function batchDelete(){
+function batchDelete() {
     const checkboxes = document.querySelectorAll('.checkbox-item:checked');
-    const selectedCount = checkboxes.length;
-    
-    if(selectedCount === 0){
+    const count = checkboxes.length;
+    if (count === 0) {
         alert("请先勾选要删除的素材！");
         return;
     }
 
-    if(confirm(`确定删除选中的 ${selectedCount} 个素材吗？此操作不可恢复！`)){
-        // 收集选中的索引（倒序删除，避免索引错乱）
-        const selectedIndexes = Array.from(checkboxes)
-            .map(checkbox => parseInt(checkbox.dataset.index))
-            .sort((a,b) => b - a);
+    if (confirm(`确定删除选中的 ${count} 个素材吗？`)) {
+        // 倒序删除，避免索引错乱
+        const indexes = Array.from(checkboxes)
+            .map(cb => parseInt(cb.dataset.index))
+            .sort((a, b) => b - a);
         
-        // 批量删除
-        selectedIndexes.forEach(index => {
-            data.splice(index, 1);
+        indexes.forEach(idx => {
+            materialData.splice(idx, 1);
         });
         
-        // 保存数据并重新渲染
-        localStorage.setItem("materialData",JSON.stringify(data));
-        renderList();
-        
-        // 取消全选
+        localStorage.setItem("qiniuMaterialData", JSON.stringify(materialData));
+        renderMaterialList();
         document.getElementById('selectAll').checked = false;
-        
-        alert(`成功删除 ${selectedCount} 个素材！`);
+        alert(`成功删除 ${count} 个素材！`);
     }
 }
 
-// 预览
-function show(type,src){
-    let m = document.getElementById("modal");
-    let img = document.getElementById("preImg");
-    let video = document.getElementById("preVideo");
-    m.classList.add("active");
-    type==="img"?(img.style.display="block",video.style.display="none",img.src=src):(img.style.display="none",video.style.display="block",video.src=src);
-}
+// 页面加载时渲染列表
+window.onload = function() {
+    if (loginStatus) {
+        document.getElementById("loginBox").classList.add("d-none");
+        document.getElementById("adminMain").classList.remove("d-none");
+        renderMaterialList();
+    }
+};
 
-function closeModal(){
-    document.getElementById("modal").classList.remove("active");
-    document.getElementById("preVideo").pause();
-}
+// 引入CryptoJS（生成上传凭证用）
+(function(d, s) {
+    var js, fjs = d.getElementsByTagName(s)[0];
+    js = d.createElement(s);
+    js.src = 'https://cdn.staticfile.org/crypto-js/4.1.1/crypto-js.min.js';
+    fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script'));
 </script>
 </body>
 </html>
