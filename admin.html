@@ -29,7 +29,7 @@
 <div class="container py-4">
     <!-- 登录弹窗 -->
     <div id="loginBox" class="py-5 text-center">
-        <input type="password" id="pwd" class="form-control w-50 mx-auto mb-3" placeholder="管理员密码：123456">
+        <input type="password" id="pwd" class="form-control w-50 mx-auto mb-3" placeholder="请输入密码">
         <button class="btn btn-danger" onclick="login()">登录后台</button>
     </div>
 
@@ -63,7 +63,7 @@
 </div>
 
 <script>
-const PASSWORD = "123456";
+const PASSWORD = "goodluck";
 let data = JSON.parse(localStorage.getItem("materialData")) || [];
 let loginStatus = localStorage.getItem("adminLogin") === "true";
 
