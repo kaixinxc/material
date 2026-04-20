@@ -47,6 +47,10 @@
             border-bottom: 1px dashed #eee;
             margin: 5px 0;
         }
+        /* 隐藏原生文件选择框，用按钮触发 */
+        #fileInput {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -84,14 +88,16 @@
                 </select>
             </div>
             
-            <!-- 上传按钮 -->
-            <button class="btn btn-primary" id="selectFileBtn">选择大文件（800MB+）</button>
+            <!-- 核心修改：原生文件选择框 + 按钮触发 -->
+            <input type="file" id="fileInput" multiple onchange="handleFileSelect()">
+            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">选择大文件（800MB+）</button>
+            <button class="btn btn-success ms-2" id="uploadBtn" disabled>开始上传</button>
             
             <!-- 上传进度 -->
             <div class="upload-progress mt-4" id="totalProgress">
                 <div class="progress-bar" id="totalProgressBar"></div>
             </div>
-            <div class="progress-info" id="progressText">请选择文件开始上传</div>
+            <div class="progress-info" id="progressText">请选择文件后点击「开始上传」</div>
             
             <!-- 已上传文件列表 -->
             <div class="mt-4 w-80 mx-auto text-left" id="fileList">
@@ -115,16 +121,17 @@
 </div>
 
 <script>
-// ===================== 已填入你的七牛云配置！=====================
+// ===================== 你的七牛云配置 =====================
 const ACCESS_KEY = "4mVCrBCgrPfvehJeKeSaDIGwbnUaG8ke4ONPbUHq";
 const SECRET_KEY = "rOaWd_g7NlLSqfnSnl8sL-tTa1Xq9M_stiwzvba8";
 const BUCKET_DOMAIN = "tdsgn3px0.hd-bkt.clouddn.com";
 const BUCKET_NAME = "kaixinxiaochen";
-// ================================================================
+// ==========================================================
 
 const PASSWORD = "123456";
 let loginStatus = localStorage.getItem("adminLogin") === "true";
 let materialData = JSON.parse(localStorage.getItem("qiniuMaterialData")) || [];
+let selectedFiles = []; // 存储选中的文件
 
 // 等待DOM加载完成
 document.addEventListener('DOMContentLoaded', function() {
@@ -135,8 +142,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (loginStatus) {
         showAdminPanel();
     }
-    // 绑定上传按钮
-    document.getElementById("selectFileBtn").addEventListener('click', initQiniuUpload);
 });
 
 // 登录函数
@@ -175,11 +180,32 @@ function showAdminPanel() {
     renderMaterialList();
 }
 
+// 选择文件后触发（核心修复：原生文件选择）
+function handleFileSelect() {
+    selectedFiles = Array.from(document.getElementById("fileInput").files);
+    if (selectedFiles.length === 0) {
+        document.getElementById("uploadBtn").disabled = true;
+        document.getElementById("progressText").textContent = "请选择文件后点击「开始上传」";
+        return;
+    }
+
+    // 显示选中的文件信息
+    let fileInfo = `已选择 ${selectedFiles.length} 个文件：<br>`;
+    selectedFiles.forEach(file => {
+        const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+        fileInfo += `• ${file.name} (${sizeMB}MB)<br>`;
+    });
+    document.getElementById("progressText").innerHTML = fileInfo;
+    document.getElementById("uploadBtn").disabled = false;
+    // 绑定上传按钮点击事件（仅首次选择文件时绑定）
+    document.getElementById("uploadBtn").onclick = startUpload;
+}
+
 // 获取七牛云上传凭证
 function getUploadToken() {
     const putPolicy = {
         scope: BUCKET_NAME,
-        deadline: Math.floor(Date.now() / 1000) + 3600,
+        deadline: Math.floor(Date.now() / 1000) + 3600, // 1小时有效期
     };
     try {
         const encodedPolicy = btoa(JSON.stringify(putPolicy)).replace(/\//g, '_').replace(/\+/g, '-');
@@ -187,62 +213,99 @@ function getUploadToken() {
         return ACCESS_KEY + ':' + sign + ':' + encodedPolicy;
     } catch (e) {
         console.error("生成凭证失败：", e);
-        alert("生成上传凭证失败，请检查七牛云配置是否正确！");
+        alert("生成上传凭证失败，请检查七牛云配置！");
         return null;
     }
 }
 
-// 初始化七牛云上传
-function initQiniuUpload() {
+// 手动开始上传（核心：原生文件 + 七牛云分片上传）
+function startUpload() {
+    if (selectedFiles.length === 0) {
+        alert("请先选择文件！");
+        return;
+    }
+
     const token = getUploadToken();
     if (!token) return;
 
-    const uploader = qiniu.uploader({
-        runtimes: 'html5,flash,html4',
-        browse_button: 'selectFileBtn',
-        uptoken: token,
-        domain: BUCKET_DOMAIN,
-        chunk_size: '4mb',
-        auto_start: true,
-        unique_names: true,
-        
-        // 上传进度回调
-        uploadProgress: function(up, file) {
-            const percent = file.percent;
-            document.getElementById("totalProgressBar").style.width = percent + '%';
-            document.getElementById("progressText").innerHTML = 
-                `正在上传：${file.name} <br>
-                进度：${percent.toFixed(2)}% | 已传：${(file.loaded/1024/1024).toFixed(2)}MB/${(file.size/1024/1024).toFixed(2)}MB <br>
-                分片：${file.chunk_idx + 1}/${file.chunks}`;
-        },
-        
-        // 上传完成
-        fileUploaded: function(up, file, info) {
-            const res = JSON.parse(info);
-            const fileUrl = `https://${BUCKET_DOMAIN}/${res.key}`;
-            const cate = document.getElementById("cate").value;
-            
-            // 保存素材信息
-            materialData.push({
-                name: file.name,
-                type: file.type.startsWith("image") ? "img" : "video",
-                cate: cate,
-                url: fileUrl,
-                key: res.key
+    const cate = document.getElementById("cate").value;
+    const totalFiles = selectedFiles.length;
+    let completedFiles = 0;
+
+    // 逐个上传选中的文件
+    selectedFiles.forEach(async (file) => {
+        try {
+            // 生成唯一文件名（避免重复）
+            const fileName = `${Date.now()}-${file.name.replace(/\s+/g, '-')}`;
+            const fileSize = file.size;
+            const chunkSize = 4 * 1024 * 1024; // 4MB/片
+            const chunkCount = Math.ceil(fileSize / chunkSize);
+
+            // 初始化七牛云分片上传
+            const observable = qiniu.upload(
+                file,
+                fileName,
+                token,
+                {
+                    fname: file.name,
+                    params: {},
+                    mimeType: [file.type, '*/*']
+                },
+                {
+                    region: qiniu.region.z0, // 华东区域（根据你的存储空间调整：z0=华东，z1=华北，z2=华南）
+                    chunkSize: chunkSize,
+                    concurrentRequestLimit: 3 // 并发上传数
+                }
+            );
+
+            // 监听上传进度
+            observable.subscribe({
+                next: (res) => {
+                    // 计算进度
+                    const percent = res.total.percent;
+                    document.getElementById("totalProgressBar").style.width = `${percent}%`;
+                    document.getElementById("progressText").innerHTML = 
+                        `正在上传：${file.name} <br>
+                        进度：${percent.toFixed(2)}% | 已传：${(res.total.loaded/1024/1024).toFixed(2)}MB/${(fileSize/1024/1024).toFixed(2)}MB <br>
+                        分片：${res.chunkIndex + 1}/${chunkCount}`;
+                },
+                error: (err) => {
+                    console.error("上传失败：", err);
+                    alert(`❌ ${file.name} 上传失败：${err.message}`);
+                    document.getElementById("progressText").textContent = `❌ ${file.name} 上传失败：${err.message}`;
+                },
+                complete: (res) => {
+                    // 上传完成，拼接文件链接
+                    const fileUrl = `https://${BUCKET_DOMAIN}/${res.key}`;
+                    // 保存素材信息
+                    materialData.push({
+                        name: file.name,
+                        type: file.type.startsWith("image") ? "img" : "video",
+                        cate: cate,
+                        url: fileUrl,
+                        key: res.key
+                    });
+                    localStorage.setItem("qiniuMaterialData", JSON.stringify(materialData));
+                    
+                    completedFiles++;
+                    const totalProgress = (completedFiles / totalFiles) * 100;
+                    document.getElementById("totalProgressBar").style.width = `${totalProgress}%`;
+                    document.getElementById("progressText").textContent = `✅ ${file.name} 上传完成！链接：${fileUrl}`;
+                    
+                    // 全部上传完成后刷新列表
+                    if (completedFiles === totalFiles) {
+                        renderMaterialList();
+                        alert(`✅ 所有文件上传完成！共上传 ${completedFiles} 个文件`);
+                        // 重置按钮和文件选择框
+                        document.getElementById("uploadBtn").disabled = true;
+                        document.getElementById("fileInput").value = "";
+                        selectedFiles = [];
+                    }
+                }
             });
-            localStorage.setItem("qiniuMaterialData", JSON.stringify(materialData));
-            
-            // 更新界面
-            document.getElementById("totalProgressBar").style.width = '100%';
-            document.getElementById("progressText").textContent = `✅ ${file.name} 上传完成！链接：${fileUrl}`;
-            renderMaterialList();
-        },
-        
-        // 上传错误
-        error: function(up, err, errTip) {
-            console.error("上传错误：", err, errTip);
-            alert(`上传失败：${errTip}`);
-            document.getElementById("progressText").textContent = `❌ 上传失败：${errTip}`;
+        } catch (e) {
+            console.error("上传异常：", e);
+            alert(`❌ ${file.name} 上传异常：${e.message}`);
         }
     });
 }
