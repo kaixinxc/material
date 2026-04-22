@@ -3,133 +3,246 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>开心小陈学员专用</title>
-    <!-- 引入Bootstrap样式（无需本地下载） -->
+    <title>开心小陈学员专属</title>
+    <!-- Bootstrap 5 -->
     <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <!-- 图标库 -->
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
-        /* 页面基础样式 */
+        /* 全局基础 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         body {
-            background-color: #f8f9fa;
-            font-family: "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #f8f9ff 0%, #eef2fc 100%);
+            font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+            min-height: 100vh;
+            scroll-behavior: smooth;
+            padding-top: 70px; /* 适配固定导航栏 */
         }
-        /* 标题样式 */
+
+        /* 固定顶部导航栏（新增） */
+        .navbar-custom {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+            padding: 15px 0;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: #3671ff !important;
+            font-size: 20px;
+        }
+
+        /* 标题美化 */
         .page-title {
-            margin: 30px 0;
-            font-weight: 600;
-            color: #2d3748;
+            margin: 40px 0;
+            font-weight: 700;
+            background: linear-gradient(90deg, #3671ff, #6a11cb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            position: relative;
+            opacity: 0;
+            animation: fadeIn 1s forwards;
         }
-        /* 卡片悬浮效果 */
-        .material-card {
-            border: none;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
-            margin-bottom: 20px;
+        .page-title::after {
+            content: "";
+            width: 80px;
+            height: 4px;
+            background: #3671ff;
+            border-radius: 2px;
+            position: absolute;
+            bottom: -12px;
+            left: 50%;
+            transform: translateX(-50%);
         }
-        .material-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
-        }
-        /* 预览图适配 */
-        .card-img-top {
-            height: 200px;
-            object-fit: cover;
-            border-radius: 8px 8px 0 0;
-        }
-        /* 下载按钮样式 */
-        .download-btn {
-            background-color: #1890ff;
-            border: none;
-            width: 100%;
-        }
-        .download-btn:hover {
-            background-color: #096dd9;
-        }
-        /* 飞书文件夹入口样式 */
+
+        /* 飞书素材库卡片 */
         .feishu-folder {
             text-align: center;
-            margin: 20px 0;
-            padding: 20px;
-            background-color: #fff;
+            margin: 30px 0;
+            padding: 30px;
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(54, 113, 255, 0.1);
+            border: 1px solid rgba(54, 113, 255, 0.1);
+            transition: 0.3s;
+            opacity: 0;
+            animation: fadeIn 1s 0.2s forwards;
+        }
+        .feishu-folder:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(54, 113, 255, 0.15);
+        }
+
+        /* 素材卡片 */
+        .material-card {
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            margin-bottom: 25px;
+            height: 100%;
+            background: #fff;
+            overflow: hidden;
+            position: relative;
+            /* 滚动淡入动画 */
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        .material-card.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .material-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+        }
+
+        /* 卡片角标（新增：区分教程/素材） */
+        .card-tag {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #fff;
+            z-index: 10;
+        }
+        .tag-teach {
+            background: #3671ff;
+        }
+        .tag-material {
+            background: #20c997;
+        }
+
+        /* 预览图：固定400*200 */
+        .card-img-top {
+            width: 400px;
+            height: 200px;
+            max-width: 100%;
+            object-fit: cover;
+            border-radius: 16px 16px 0 0;
+            transition: 0.4s;
+            margin: 0 auto;
+        }
+        .material-card:hover .card-img-top {
+            transform: scale(1.05);
+        }
+
+        /* 按钮美化 */
+        .download-btn {
+            background: linear-gradient(90deg, #3671ff, #4a90e2);
+            border: none;
+            width: 100%;
+            padding: 10px;
             border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            font-weight: 500;
+            transition: 0.3s;
+        }
+        .download-btn:hover {
+            background: linear-gradient(90deg, #2a5bd7, #3671ff);
+            transform: translateY(-2px);
+            color: #fff;
+            box-shadow: 0 4px 10px rgba(54,113,255,0.2);
+        }
+
+        /* 页脚（新增） */
+        .footer {
+            margin-top: 60px;
+            padding: 30px 0;
+            background: #fff;
+            text-align: center;
+            box-shadow: 0 -2px 15px rgba(0,0,0,0.05);
+        }
+
+        /* 入场动画 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- 页面标题 -->
-        <h1 class="page-title text-center">开心小陈学员专用</h1>
 
-        <!-- 飞书文件夹快捷入口（直接跳转你的素材库） -->
-        <div class="feishu-folder">
-            <h4>素材库（点击查看全部素材）</h4>
-            <a href="https://my.feishu.cn/drive/folder/YR9Cf7KVDlRo8ZdsvtKcpNuZnRO?from=from_copylink" 
-               target="_blank" class="btn btn-primary mt-2">
-                打开素材库
+    <!-- 新增：固定顶部导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fa-solid fa-graduation-cap me-2"></i>开心小陈学员专属
             </a>
-            <p class="text-muted mt-2">所有素材仅供练习所用，禁止商用！</p>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1 class="page-title text-center">开心小陈【学员专属】</h1>
+
+        <!-- 飞书文件夹入口 -->
+        <div class="feishu-folder">
+            <h4><i class="fa-solid fa-folder-open me-2"></i>素材库（点击查看全部素材）</h4>
+            <a href="https://my.feishu.cn/drive/folder/VL7ufnG0ylpaKxdfsCicJgqjnng?from=from_copylink" 
+               target="_blank" class="btn btn-primary mt-2 px-4 py-2">
+                <i class="fa-solid fa-link me-1"></i> 打开素材库
+            </a>
+            <p class="text-muted mt-3 mb-0"><i class="fa-solid fa-exclamation-circle me-1"></i>所有素材仅供练习所用，禁止商用！</p>
         </div>
 
-        <!-- 素材卡片列表（示例：可根据你的素材新增） -->
-        <div class="row">
-            <!-- 素材卡片1（示例） -->
-            <div class="col-md-3 col-sm-6">
-                <div class="card material-card h-100">
-                    <!-- 飞书自动生成的预览图占位（替换为你的素材预览图链接） -->
-                    <img src="https://picsum.photos/400/200" class="card-img-top" alt="素材预览图">
+        <!-- 素材卡片 -->
+        <div class="row g-4">
+            <div class="col-md-3 col-sm-6 col-12">
+                <div class="card material-card">
+                    <span class="card-tag tag-teach">教程</span>
+                    <img src="https://s3.bmp.ovh/2026/04/22/Ict8QZa5.png" class="card-img-top" alt="素材预览图" loading="lazy">
                     <div class="card-body text-center">
                         <h5 class="card-title text-truncate">手机看课方法</h5>
-                        <p class="text-muted small">如何用手机看课</p>
-                        <!-- 跳转飞书下载链接 -->
-                        <a href="https://my.feishu.cn/file/VEOEbHYs4owXwExDNhocjJjnnTb" 
-                           target="_blank" class="btn download-btn">
-                            立即观看
+                        <p class="text-muted">如何用手机看课</p>
+                        <a href="https://my.feishu.cn/file/VEOEbHYs4owXwExDNhocjJjnnTb" target="_blank" class="btn download-btn text-white">
+                            <i class="fa-solid fa-play me-1"></i> 立即观看
                         </a>
                     </div>
                 </div>
             </div>
 
-            <!-- 素材卡片2（示例） -->
-            <div class="col-md-3 col-sm-6">
-                <div class="card material-card h-100">
-                    <img src="https://picsum.photos/400/201" class="card-img-top" alt="素材预览图">
+            <div class="col-md-3 col-sm-6 col-12">
+                <div class="card material-card">
+                    <span class="card-tag tag-teach">教程</span>
+                    <img src="https://s3.bmp.ovh/2026/04/22/6SxfRpBY.png" class="card-img-top" alt="素材预览图" loading="lazy">
                     <div class="card-body text-center">
                         <h5 class="card-title text-truncate">电脑看课方法</h5>
-                        <p class="text-muted small">如何用电脑看课</p>
-                        <a href="https://my.feishu.cn/file/YaKwbfeH0oLMg6xli4vckbzTn9e" 
-                           target="_blank" class="btn download-btn">
-                            立即观看
+                        <p class="text-muted">如何用电脑看课</p>
+                        <a href="https://my.feishu.cn/file/YaKwbfeH0oLMg6xli4vckbzTn9e" target="_blank" class="btn download-btn text-white">
+                            <i class="fa-solid fa-play me-1"></i> 立即观看
                         </a>
                     </div>
                 </div>
             </div>
 
-            <!-- 素材卡片3（示例） -->
-            <div class="col-md-3 col-sm-6">
-                <div class="card material-card h-100">
-                    <img src="https://picsum.photos/400/202" class="card-img-top" alt="素材预览图">
+            <div class="col-md-3 col-sm-6 col-12">
+                <div class="card material-card">
+                    <span class="card-tag tag-teach">教程</span>
+                    <img src="https://s3.bmp.ovh/2026/04/22/qD1G0X5k.png" class="card-img-top" alt="素材预览图" loading="lazy">
                     <div class="card-body text-center">
                         <h5 class="card-title text-truncate">电视看课方法</h5>
-                        <p class="text-muted small">如何用电视看课</p>
-                        <a href="https://my.feishu.cn/drive/folder/YR9Cf7KVDlRo8ZdsvtKcpNuZnRO?from=from_copylink" 
-                           target="_blank" class="btn download-btn">
-                            立即观看
+                        <p class="text-muted">如何用电视看课</p>
+                        <a href="此处粘贴飞书链接" target="_blank" class="btn download-btn text-white">
+                            <i class="fa-solid fa-play me-1"></i> 立即观看
                         </a>
                     </div>
                 </div>
             </div>
 
-            <!-- 素材卡片4（示例） -->
-            <div class="col-md-3 col-sm-6">
-                <div class="card material-card h-100">
-                    <img src="https://picsum.photos/400/203" class="card-img-top" alt="素材预览图">
+            <div class="col-md-3 col-sm-6 col-12">
+                <div class="card material-card">
+                    <span class="card-tag tag-material">素材</span>
+                    <img src="https://s3.bmp.ovh/2026/04/22/78C0H3ik.png" class="card-img-top" alt="素材预览图" loading="lazy">
                     <div class="card-body text-center">
-                        <h5 class="card-title text-truncate">素材中心</h5>
-                        <p class="text-muted small">大小：201GB</p>
-                        <a href="https://my.feishu.cn/drive/folder/VL7ufnG0ylpaKxdfsCicJgqjnng" 
-                           target="_blank" class="btn download-btn">
-                            立即下载
+                        <h5 class="card-title text-truncate">练习素材</h5>
+                        <p class="text-muted">大小：107GB</p>
+                        <a href="https://my.feishu.cn/drive/folder/XhrKfg7r3ltS11d72y2cIjfEnLc?from=from_copylink" target="_blank" class="btn download-btn text-white">
+                            <i class="fa-solid fa-download me-1"></i> 立即下载
                         </a>
                     </div>
                 </div>
@@ -137,7 +250,32 @@
         </div>
     </div>
 
-    <!-- 引入Bootstrap脚本（可选，不影响核心功能） -->
+    <!-- 新增：精美页脚 -->
+    <div class="footer">
+        <div class="container">
+            <p class="text-muted mb-1">© 2025 开心小陈 | 学员专用学习平台</p>
+            <p class="text-muted small">素材仅供学习使用，严禁商业用途</p>
+        </div>
+    </div>
+
+    <!-- 脚本 -->
     <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 滚动动画：卡片滑入效果
+        document.addEventListener('DOMContentLoaded', function () {
+            const cards = document.querySelectorAll('.material-card');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('show');
+                    }
+                });
+            }, { threshold: 0.1 });
+
+            cards.forEach(card => {
+                observer.observe(card);
+            });
+        });
+    </script>
 </body>
 </html>
